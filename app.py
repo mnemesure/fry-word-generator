@@ -13,6 +13,29 @@ st.set_page_config(
 st.title("📚 Fry Word List Generator")
 st.write("Select one or multiple Fry word lists and generate random words from each.")
 
+# Add Comic Sans styling
+st.markdown("""
+    <style>
+        .word-box {
+            font-family: 'Comic Sans MS', 'Comic Sans', cursive;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            padding: 12px;
+            background-color: #ecf0f1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+            margin: 8px 0;
+        }
+        .word-box p {
+            font-size: 20px;
+            margin: 0;
+            text-align: center;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # Sidebar for list selection
 st.sidebar.header("Configuration")
 
@@ -83,12 +106,12 @@ if st.sidebar.button("🎲 Generate Words", use_container_width=True):
     for col, list_name in zip(cols, selected_lists):
         with col:
             st.subheader(list_name)
-            # Display words in boxes
+            # Display words in boxes with Comic Sans
             words = all_generated[list_name]
             word_cols = st.columns(2)
             for idx, word in enumerate(words):
                 with word_cols[idx % 2]:
-                    st.info(f"**{word.upper()}**", icon="📝")
+                    st.markdown(f'<div class="word-box"><p style="font-size: 24px; margin: 10px 0;"><strong>{word}</strong></p></div>', unsafe_allow_html=True)
     
     st.divider()
     
