@@ -8,7 +8,7 @@ from pathlib import Path
 def load_fry_word_lists_from_pdf() -> Dict[str, List[str]]:
     """
     Extract Fry word lists from the PDF file (pages 3-13).
-    Segments words by top-level headers (The First Hundred, The Second Hundred, etc.)
+    Groups words by the "hundred" headers shown in the PDF (The First Hundred, The Second Hundred, etc.)
     Returns a dictionary with header names as keys and word lists as values.
     """
     pdf_path = Path(__file__).parent / "fry-word-list.pdf"
@@ -19,42 +19,70 @@ def load_fry_word_lists_from_pdf() -> Dict[str, List[str]]:
     with open(pdf_path, 'rb') as f:
         reader = pypdf.PdfReader(f)
         
-        # Process each page and associate content with headers
         word_lists = {}
-        current_hundred = None
+        processed_hundreds = set()  # Track which hundreds we've already processed
         
-        for page_num in range(2, 13):  # Pages 3-13 (indices 2-12)
+        # Process pages 3-13 (indices 2-12)
+        # Each page has one header specifying which hundred it belongs to
+        for page_num in range(2, 13):
             if page_num >= len(reader.pages):
                 break
-                
+            
             page_text = reader.pages[page_num].extract_text()
             
-            # Check if this page contains a header
+            # Find the hundred header on this page
             header_match = re.search(r'Fry Words[^–]*–\s*The\s+(\w+)\s+Hundred', page_text)
-            if header_match:
-                current_hundred = f"The {header_match.group(1)} Hundred"
-                if current_hundred not in word_lists:
-                    word_lists[current_hundred] = []
+            if not header_match:
+                continue
             
-            # If we found a header, use it for subsequent content
-            if current_hundred:
-                # Extract words from Lists on this page
-                # Find all "List N" sections
-                list_pattern = r'List\s+\d+\s*(.*?)(?=List\s+\d+|$)'
-                list_matches = re.findall(list_pattern, page_text, re.DOTALL)
-                
-                for list_content in list_matches:
-                    # Extract words: lowercase letters, apostrophes allowed for contractions
-                    words = re.findall(r'\b[a-z\']+\b', list_content.lower())
+            hundred_name = f"The {header_match.group(1)} Hundred"
+            
+            # Skip if we've already processed this hundred (duplicate pages)
+            if hundred_name in processed_hundreds:
+                continue
+            
+            processed_hundreds.add(hundred_name)
+            if hundred_name not in word_lists:
+                word_lists[hundred_name] = []
+            
+            # Extract all lists from this page
+            list_pattern = r'List\s+(\d+)\s*\n((?:(?!List\s+\d+).)*?)(?=List\s+\d+|$)'
+            list_matches = re.findall(list_pattern, page_text, re.DOTALL)
+            
+            for list_num_str, words_text in list_matches:
+                # Extract individual words from this list
+                lines = words_text.strip().split('\n')
+                for line in lines:
+                    line = line.strip()
                     
-                    for w in words:
-                        # Clean up contractions
-                        w_clean = w.replace("'", "").replace("`", "")
+                    # Skip empty lines
+                    if not line:
+                        continue
+                    
+                    # Skip full footer/header lines (multiple words on one line)
+                    if len(line.split()) > 1:
+                        # Multi-word lines are headers/footers
+                        if any(skip in line.lower() for skip in ('fry words', 'free for', 'copyright', 'anne gardner')):
+                            continue
+                    
+                    # Skip single metadata words
+                    if line.lower() in ('free', 'copyright', '–', '2014', 'anne', 'gardner'):
+                        continue
+                    if re.match(r'^(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(hundred)?$', line.lower()):
+                        continue
+                    
+                    # Extract just alphabetic characters and apostrophes
+                    word = re.sub(r'[^a-z\']', '', line.lower())
+                    
+                    if word:
+                        # Handle contractions: don't -> dont
+                        word_clean = word.replace("'", "")
                         
-                        # Skip only header/footer artifacts, not legitimate words
-                        if w_clean not in ('list', 'free', 'copyright', 'anne', 'gardner', 
-                                         'classroom', 'use', 'don', 't') and w_clean not in word_lists[current_hundred]:
-                            word_lists[current_hundred].append(w_clean)
+                        # Skip single 't' from contractions
+                        if word_clean and word_clean != 't' and len(word_clean) > 0:
+                            # Avoid duplicates within the same hundred
+                            if word_clean not in word_lists[hundred_name]:
+                                word_lists[hundred_name].append(word_clean)
     
     return word_lists
 
